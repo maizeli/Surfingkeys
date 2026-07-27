@@ -550,6 +550,7 @@ Some functionalities are also available when you're using original pdf viewer, b
 | settings.focusOnSaved | true | Whether to focus text input after quitting from vim editor. |
 | settings.omnibarMaxResults | 10 | How many results will be listed out each page for Omnibar. |
 | settings.omnibarHistoryCacheSize | 100 | The maximum of items fetched from browser history. |
+| settings.omnibarPinyinSearch | true | Whether Omnibar URL sources such as tabs, history, and bookmarks support full pinyin, initials, polyphonic readings, and ordered skipped-letter matching. |
 | settings.omnibarPosition | "middle" | Where to position Omnibar. ["middle", "bottom"] |
 | settings.omnibarSuggestion | false | Show suggestion URLs|
 | settings.omnibarSuggestionTimeout | 200 | Timeout duration before Omnibar suggestion URLs are queried, in milliseconds. Helps prevent unnecessary HTTP requests and API rate-limiting. |

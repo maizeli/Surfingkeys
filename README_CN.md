@@ -537,6 +537,7 @@ Surfingkeys默认使用[这个markdown分析器](https://github.com/chjj/marked)
 | settings.focusOnSaved | true | 是否在退出内嵌VIM编辑器后把光标定位到输入框。 |
 | settings.omnibarMaxResults | 10 | 搜索栏下面每页显示多少条结果。 |
 | settings.omnibarHistoryCacheSize | 100 | 从浏览历史记录中返回查询结果的最大条数. |
+| settings.omnibarPinyinSearch | true | 是否为搜索栏中的标签页、历史、书签等网址来源启用全拼、首字母、多音字和有序跳字母匹配。 |
 | settings.omnibarPosition | "middle" | 定义搜索框位置。 ["middle", "bottom"] |
 | settings.omnibarSuggestionTimeout | 200 | 设置触发搜索引擎提示的超时，当按键过去设定毫秒后才发起搜索引擎提示的请求，这样避免每次按键就触发请求。|
 | settings.focusFirstCandidate | false | 是否在搜索栏下面自动选择第一个匹配的结果。 |
