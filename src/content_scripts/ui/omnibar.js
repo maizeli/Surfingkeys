@@ -24,12 +24,14 @@ import {
 } from '../common/utils.js';
 import { RUNTIME, runtime } from '../common/runtime.js';
 import LLMChat from './llmchat';
+import createPinyinSearch from './pinyinSearch';
 
 const separator = '➤';
 const separatorHtml = `<span class='separator'>${separator}</span>`;
 
 function createOmnibar(front, clipboard) {
     var self = new Mode("Omnibar");
+    const pinyinSearch = createPinyinSearch();
 
     self.addEventListener('keydown', function(event) {
         if (event.sk_keyName.length) {
@@ -495,6 +497,19 @@ function createOmnibar(front, clipboard) {
         return runtime.conf.omnibarHistoryCacheSize;
     };
 
+    self.needsPinyinSearch = query => {
+        return runtime.conf.omnibarPinyinSearch && /[a-z]/i.test(query);
+    };
+
+    self.filterURLs = function(items, query = self.input.value) {
+        return pinyinSearch.filter(
+            items,
+            query,
+            runtime.getCaseSensitive(query),
+            runtime.conf.omnibarPinyinSearch
+        );
+    };
+
     self.listURLs = function(items, showFolder) {
         _start = 1;
         _items = items;
@@ -588,6 +603,7 @@ function createOmnibar(front, clipboard) {
         // cannot normally delete a variable declared using var, whatever the scope.
         _items = null;
         bookmarkFolders = null;
+        pinyinSearch.clear();
 
         lastInput = "";
         self.input.value = "";
@@ -737,7 +753,7 @@ function createOmnibar(front, clipboard) {
                 var results = response.tabs;
                 RUNTIME("getTopSites", null, function(response) {
                     results = results.concat(response.urls);
-                    results = filterByTitleOrUrl(results, self.input.value, runtime.getCaseSensitive(self.input.value));
+                    results = self.filterURLs(results);
                     self.listBookmarkFolders(function() {
                         RUNTIME('getAllURLs', {
                             maxResults: self.getHistoryCacheSize() - results.length,
@@ -754,14 +770,14 @@ function createOmnibar(front, clipboard) {
     self.addHandler('RecentlyClosed', OpenURLs(`Recently closed${separatorHtml}`, self, () => {
         return new Promise((resolve, reject) => {
             RUNTIME('getRecentlyClosed', null, function(response) {
-                resolve(filterByTitleOrUrl(response.urls, self.input.value, runtime.getCaseSensitive(self.input.value)));
+                resolve(self.filterURLs(response.urls));
             });
         });
     }));
     self.addHandler('TabURLs', OpenURLs(`Tab History${separatorHtml}`, self, () => {
         return new Promise((resolve, reject) => {
             RUNTIME('getTabURLs', null, function(response) {
-                resolve(filterByTitleOrUrl(response.urls, self.input.value, runtime.getCaseSensitive(self.input.value)));
+                resolve(self.filterURLs(response.urls));
             });
         });
     }));
@@ -791,9 +807,16 @@ function OpenBookmarks(omnibar) {
     var folderOnly = false,
         currentFolderId,
         lastFocused = 0;
+    var rawBookmarks, rawParentId;
+
+    function clearRawBookmarks() {
+        rawBookmarks = null;
+        rawParentId = undefined;
+    }
 
     function onFolderUp() {
         var fl = self.inFolder.pop();
+        clearRawBookmarks();
         if (fl.folderId) {
             currentFolderId = fl.folderId;
             RUNTIME('getBookmarks', {
@@ -847,6 +870,7 @@ function OpenBookmarks(omnibar) {
             omnibar.input.value = "";
             currentFolderId = folderId;
             lastFocused = 0;
+            clearRawBookmarks();
             RUNTIME('getBookmarks', {
                 parentId: currentFolderId
             }, self.onResponse);
@@ -883,6 +907,7 @@ function OpenBookmarks(omnibar) {
         self.inFolder = [];
         self.prompt = `bookmark${separatorHtml}`;
         currentFolderId = undefined;
+        clearRawBookmarks();
     };
 
     self.onKeydown = function(event) {
@@ -891,10 +916,7 @@ function OpenBookmarks(omnibar) {
             folderOnly = !folderOnly;
             self.prompt = folderOnly ? `bookmark folder${separator}` : `bookmark${separator}`;
             setSanitizedContent(omnibar.promptSpan, self.prompt);
-            RUNTIME('getBookmarks', {
-                parentId: currentFolderId,
-                query: omnibar.input.value
-            }, self.onResponse);
+            self.onInput();
             eaten = true;
         } else if (event.keyCode === KeyboardUtils.keyCodes.backspace && self.inFolder.length && !omnibar.input.value.length) {
             onFolderUp();
@@ -911,6 +933,25 @@ function OpenBookmarks(omnibar) {
     };
     self.onInput = function() {
         var query = omnibar.input.value;
+        if (omnibar.needsPinyinSearch(query)) {
+            if (rawBookmarks && rawParentId === currentFolderId) {
+                self.onResponse({
+                    bookmarks: omnibar.filterURLs(rawBookmarks, query)
+                });
+                return;
+            }
+            RUNTIME('getBookmarks', {
+                parentId: currentFolderId,
+                raw: true
+            }, function(response) {
+                rawBookmarks = response.bookmarks;
+                rawParentId = currentFolderId;
+                self.onResponse({
+                    bookmarks: omnibar.filterURLs(rawBookmarks, query)
+                });
+            });
+            return;
+        }
         RUNTIME('getBookmarks', {
             parentId: currentFolderId,
             caseSensitive: runtime.getCaseSensitive(query),
@@ -1117,7 +1158,7 @@ function OpenTabs(omnibar) {
     };
     self.onInput = function() {
         omnibar.cachedPromise.then(function(cached) {
-            var filtered = filterByTitleOrUrl(cached, omnibar.input.value, runtime.getCaseSensitive(omnibar.input.value));
+            var filtered = omnibar.filterURLs(cached);
             omnibar.listURLs(filtered, false);
         });
     };
@@ -1140,7 +1181,7 @@ function CloseTabs(omnibar) {
     };
     self.onInput = function() {
         omnibar.cachedPromise.then(function(cached) {
-            var filtered = filterByTitleOrUrl(cached, omnibar.input.value, runtime.getCaseSensitive(omnibar.input.value));
+            var filtered = omnibar.filterURLs(cached);
             filtered.forEach(function(tab) {
                 try {
                     var u = new URL(tab.url);

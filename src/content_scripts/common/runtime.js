@@ -73,6 +73,7 @@ const runtime = (function() {
             digitForRepeat: true,
             omnibarMaxResults: 10,
             omnibarHistoryCacheSize: 100,
+            omnibarPinyinSearch: true,
             omnibarPosition: "middle",
             omnibarSuggestion: true,
             omnibarSuggestionTimeout: 200,

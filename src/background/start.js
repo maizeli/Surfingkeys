@@ -1109,7 +1109,7 @@ function start(browser) {
         if (message.parentId) {
             chrome.bookmarks.getSubTree(message.parentId, function(tree) {
                 var bookmarks = tree[0].children;
-                if (message.query && message.query.length) {
+                if (!message.raw && message.query && message.query.length) {
                     bookmarks = filterBookmarksByQuery(bookmarks, message.query, message.caseSensitive);
                 }
                 _response(message, sendResponse, {
@@ -1117,7 +1117,13 @@ function start(browser) {
                 });
             });
         } else {
-            if (message.query && message.query.length) {
+            if (message.raw) {
+                chrome.bookmarks.search({}, function(tree) {
+                    _response(message, sendResponse, {
+                        bookmarks: tree
+                    });
+                });
+            } else if (message.query && message.query.length) {
                 chrome.bookmarks.search(message.query, function(tree) {
                     _response(message, sendResponse, {
                         bookmarks: filterBookmarksByQuery(tree, message.query, message.caseSensitive)

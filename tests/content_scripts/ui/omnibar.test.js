@@ -6,7 +6,7 @@ import KeyboardUtils from 'src/content_scripts/common/keyboardUtils';
 
 describe('ui omnibar', () => {
 
-    let Mode, createOmnibar, omnibar, Front;
+    let Mode, createOmnibar, omnibar, Front, runtime;
     beforeAll(async () => {
         global.chrome = {
             runtime: {
@@ -27,6 +27,7 @@ describe('ui omnibar', () => {
         window.postMessage({surfingkeys_frontend_data: { action: "initFrontend", origin: document.location.origin }}, document.location.origin);
 
         document.documentElement.innerHTML = html.toString();
+        runtime = require('src/content_scripts/common/runtime').runtime;
         createOmnibar = require('src/content_scripts/ui/omnibar').default;
         Mode = require('src/content_scripts/common/mode').default;
         Front = require('src/content_scripts/ui/frontend').default;
@@ -83,5 +84,49 @@ describe('ui omnibar', () => {
         });
         await new Promise((r) => setTimeout(r, 100));
         expect(elmOmnibarClass.value).toContain('sk_omnibar_bottom');
+    });
+
+    test('filters URL candidates with pinyin when enabled', () => {
+        runtime.conf.omnibarPinyinSearch = true;
+        const items = [{
+            title: '微信',
+            url: 'https://weixin.example',
+        }];
+
+        expect(omnibar.filterURLs(items, 'wx')).toEqual(items);
+    });
+
+    test('requests raw bookmarks for pinyin input', async () => {
+        runtime.conf.omnibarPinyinSearch = true;
+        localStorage.removeItem('surfingkeys.lastOpenBookmark');
+        chrome.runtime.sendMessage.mockImplementation((message, callback) => {
+            if (message.action === 'getBookmarkFolders') {
+                callback({folders: [{id: '0', title: ''}]});
+            } else if (message.action === 'getBookmarks') {
+                callback({bookmarks: []});
+            }
+        });
+
+        window.postMessage({
+            surfingkeys_frontend_data: {
+                action: 'openOmnibar',
+                type: 'Bookmarks',
+            }
+        }, document.location.origin);
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        chrome.runtime.sendMessage.mockClear();
+        omnibar.input.value = 'wx';
+        omnibar.input.dispatchEvent(new Event('input', {bubbles: true}));
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: 'getBookmarks',
+                raw: true,
+            }),
+            expect.any(Function)
+        );
+        document.getElementById('sk_omnibar').onHide();
     });
 });

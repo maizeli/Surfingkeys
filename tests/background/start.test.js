@@ -146,4 +146,25 @@ describe('background start', () => {
         });
     });
 
+    test('getBookmarks raw', async () => {
+        const bookmarks = [{
+            id: "1",
+            url: "https://weixin.example/",
+            title: "微信"
+        }];
+        chrome.bookmarks = {
+            search: jest.fn((query, cb) => cb(bookmarks)),
+            getTree: jest.fn((cb) => cb([{children: []}]))
+        };
+        const sendResponse = jest.fn();
+
+        messageListener({
+            action: "getBookmarks",
+            raw: true
+        }, null, sendResponse);
+
+        expect(chrome.bookmarks.search).toHaveBeenCalledWith({}, expect.any(Function));
+        expect(sendResponse).toHaveBeenCalledWith({bookmarks});
+    });
+
 });
