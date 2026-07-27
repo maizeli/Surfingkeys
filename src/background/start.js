@@ -1139,6 +1139,25 @@ function start(browser) {
             });
         }, message.sortByMostUsed);
     };
+    self.getHistoryPage = function(message, sender, sendResponse) {
+        const maxResults = message.maxResults || 500;
+        const endTime = message.endTime || Date.now();
+        chrome.history.search({
+            text: "",
+            startTime: 0,
+            endTime,
+            maxResults
+        }, function(items) {
+            const nextEndTime = items.length
+                ? items[items.length - 1].lastVisitTime - 0.01
+                : 0;
+            _response(message, sendResponse, {
+                history: items,
+                nextEndTime,
+                done: items.length < maxResults
+            });
+        });
+    };
     self.addHistories = function(message, sender, sendResponse) {
         message.history.forEach(h => {
             chrome.history.addUrl({url: h});

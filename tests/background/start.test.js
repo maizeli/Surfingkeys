@@ -1,3 +1,7 @@
+const {TextEncoder, TextDecoder} = require('util');
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
+
 describe('background start', () => {
     let start, messageListener;
 
@@ -106,6 +110,40 @@ describe('background start', () => {
         const sendResponse = jest.fn();
         messageListener({action: "getHistory"}, null, sendResponse);
         expect(sendResponse).toHaveBeenCalledWith({"history": historyItems});
+    });
+
+    test('getHistoryPage', async () => {
+        const historyItems = [{
+            "id": "1",
+            "url": "https://www.aaa.com/",
+            "title": "",
+            "lastVisitTime": 1555206371136,
+            "visitCount": 1
+        }];
+        chrome.history = {
+            search: jest.fn((detail, cb) => {
+                cb(historyItems);
+            })
+        };
+        const sendResponse = jest.fn();
+
+        messageListener({
+            action: "getHistoryPage",
+            endTime: 1555206372000,
+            maxResults: 500
+        }, null, sendResponse);
+
+        expect(chrome.history.search).toHaveBeenCalledWith({
+            text: "",
+            startTime: 0,
+            endTime: 1555206372000,
+            maxResults: 500
+        }, expect.any(Function));
+        expect(sendResponse).toHaveBeenCalledWith({
+            history: historyItems,
+            nextEndTime: 1555206371135.99,
+            done: true
+        });
     });
 
 });
