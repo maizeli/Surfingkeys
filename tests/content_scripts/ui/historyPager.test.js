@@ -58,4 +58,31 @@ describe('history pager', () => {
             .resolves.toEqual([{title: '微信'}]);
         expect(fetchPage).toHaveBeenCalledTimes(1);
     });
+
+    test('discards an in-flight page after clear', async () => {
+        let resolveFirstPage;
+        const fetchPage = jest.fn()
+            .mockImplementationOnce(() => new Promise(resolve => {
+                resolveFirstPage = resolve;
+            }))
+            .mockResolvedValueOnce({
+                history: [{title: 'New session'}],
+                nextEndTime: 0,
+                done: true,
+            });
+        const pager = createHistoryPager(fetchPage);
+        const oldSearch = pager.search(items => items, 1);
+
+        pager.clear();
+        resolveFirstPage({
+            history: [{title: 'Old session'}],
+            nextEndTime: 0,
+            done: true,
+        });
+
+        await expect(oldSearch).resolves.toEqual([]);
+        await expect(pager.search(items => items, 1))
+            .resolves.toEqual([{title: 'New session'}]);
+        expect(fetchPage).toHaveBeenCalledTimes(2);
+    });
 });

@@ -24,6 +24,7 @@ import {
 } from '../common/utils.js';
 import { RUNTIME, runtime } from '../common/runtime.js';
 import LLMChat from './llmchat';
+import createHistoryPager from './historyPager';
 import createPinyinSearch from './pinyinSearch';
 
 const separator = '➤';
@@ -732,20 +733,86 @@ function createOmnibar(front, clipboard) {
         });
     };
 
+    function createOmnibarHistoryPager() {
+        return createHistoryPager(args => new Promise(resolve => {
+            RUNTIME('getHistoryPage', {
+                endTime: args.endTime,
+                maxResults: args.maxResults
+            }, resolve);
+        }));
+    }
+
+    function orderHistory(items) {
+        if (!runtime.conf.historyMUOrder) {
+            return items;
+        }
+        return items.slice().sort(function(a, b) {
+            return b.visitCount - a.visitCount;
+        });
+    }
+
     self.addHandler('Bookmarks', OpenBookmarks(self));
     self.addHandler('AddBookmark', AddBookmark(self));
-    self.addHandler('History', OpenURLs(`history${separatorHtml}`, self, () => {
+    const historyPager = createOmnibarHistoryPager();
+    const historyHandler = OpenURLs(`history${separatorHtml}`, self, () => {
+        const query = self.input.value;
+        if (self.needsPinyinSearch(query)) {
+            return historyPager.search(
+                items => self.filterURLs(orderHistory(items), query),
+                self.getHistoryCacheSize()
+            );
+        }
         return new Promise((resolve, reject) => {
             RUNTIME('getHistory', {
                 maxResults: self.getHistoryCacheSize(),
-                query: self.input.value,
+                query,
                 sortByMostUsed: runtime.conf.historyMUOrder
             }, function(response) {
                 resolve(response.history);
             });
         });
-    }));
-    self.addHandler('URLs', OpenURLs(separatorHtml, self, () => {
+    });
+    const closeHistory = historyHandler.onClose;
+    historyHandler.onClose = function() {
+        closeHistory();
+        historyPager.clear();
+    };
+    self.addHandler('History', historyHandler);
+
+    const urlsHistoryPager = createOmnibarHistoryPager();
+    let rawURLBookmarks;
+    const urlsHandler = OpenURLs(separatorHtml, self, () => {
+        const query = self.input.value;
+        if (self.needsPinyinSearch(query)) {
+            const tabs = new Promise(resolve => {
+                RUNTIME('getTabs', {
+                    queryInfo: runtime.conf.omnibarTabsQuery
+                }, response => resolve(response.tabs));
+            });
+            const topSites = new Promise(resolve => {
+                RUNTIME('getTopSites', null, response => resolve(response.urls));
+            });
+            const bookmarks = rawURLBookmarks || new Promise(resolve => {
+                self.listBookmarkFolders(function() {
+                    RUNTIME('getBookmarks', {raw: true}, function(response) {
+                        resolve(response.bookmarks.filter(item => item.url !== undefined));
+                    });
+                });
+            });
+            rawURLBookmarks = bookmarks;
+            const history = urlsHistoryPager.search(
+                items => self.filterURLs(orderHistory(items), query),
+                self.getHistoryCacheSize()
+            );
+
+            return Promise.all([tabs, topSites, bookmarks, history])
+                .then(([tabItems, topSiteItems, bookmarkItems, historyItems]) => {
+                    return self.filterURLs(
+                        tabItems.concat(topSiteItems, bookmarkItems, historyItems),
+                        query
+                    ).slice(0, self.getHistoryCacheSize());
+                });
+        }
         return new Promise((resolve, reject) => {
             RUNTIME('getTabs', {
                 queryInfo: runtime.conf.omnibarTabsQuery
@@ -753,11 +820,11 @@ function createOmnibar(front, clipboard) {
                 var results = response.tabs;
                 RUNTIME("getTopSites", null, function(response) {
                     results = results.concat(response.urls);
-                    results = self.filterURLs(results);
+                    results = self.filterURLs(results, query);
                     self.listBookmarkFolders(function() {
                         RUNTIME('getAllURLs', {
                             maxResults: self.getHistoryCacheSize() - results.length,
-                            query: self.input.value
+                            query
                         } , function(response) {
                             results = results.concat(response.urls);
                             resolve(results);
@@ -766,7 +833,14 @@ function createOmnibar(front, clipboard) {
                 });
             });
         });
-    }));
+    });
+    const closeURLs = urlsHandler.onClose;
+    urlsHandler.onClose = function() {
+        closeURLs();
+        urlsHistoryPager.clear();
+        rawURLBookmarks = null;
+    };
+    self.addHandler('URLs', urlsHandler);
     self.addHandler('RecentlyClosed', OpenURLs(`Recently closed${separatorHtml}`, self, () => {
         return new Promise((resolve, reject) => {
             RUNTIME('getRecentlyClosed', null, function(response) {
