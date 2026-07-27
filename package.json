@@ -75,6 +75,7 @@
     "js-base64": "^3.7.2",
     "lodash": "^4.17.21",
     "marked": "^4.0.10",
-    "pdfjs-dist": "4.8.69"
+    "pdfjs-dist": "4.8.69",
+    "pinyin-pro": "^3.28.1"
   }
 }
