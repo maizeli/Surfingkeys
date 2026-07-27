@@ -2,7 +2,8 @@ import { pinyin, polyphonic } from 'pinyin-pro';
 import { filterByTitleOrUrl } from '../../common/utils';
 
 const asciiToken = /[a-z]/i;
-const chineseText = /\p{Script=Han}/u;
+const pinyinToken = /^[a-z0-9]+$/i;
+const chineseText = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]|[\uD840-\uD8BF][\uDC00-\uDFFF]/;
 
 function normalizePinyin(text) {
     return text.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -215,7 +216,7 @@ export default function createPinyinSearch() {
             return items.map((item, index) => {
                 const tokenScores = tokens.map(token => {
                     const raw = rawTokenScore(item, token, caseSensitive);
-                    if (raw || !asciiToken.test(token)) {
+                    if (raw || !asciiToken.test(token) || !pinyinToken.test(token)) {
                         return raw;
                     }
 

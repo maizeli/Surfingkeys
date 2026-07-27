@@ -31,6 +31,13 @@ describe('pinyin search', () => {
         expect(search.filter([url('微信')], 'xiw', false, true)).toEqual([]);
     });
 
+    test.each([
+        'wx!',
+        '微信wx',
+    ])('does not discard non-pinyin characters in %s', query => {
+        expect(search.filter([url('微信')], query, false, true)).toEqual([]);
+    });
+
     test('literal matches rank before pinyin subsequences', () => {
         const items = [
             url('微信'),
@@ -59,6 +66,16 @@ describe('pinyin search', () => {
 
         expect(search.filter(items, 'wx', false, true).map(item => item.title))
             .toEqual(['微信', '文档消息']);
+    });
+
+    test('an earlier pinyin match ranks first', () => {
+        const items = [
+            url('标题微信'),
+            url('微信标题'),
+        ];
+
+        expect(search.filter(items, 'wx', false, true).map(item => item.title))
+            .toEqual(['微信标题', '标题微信']);
     });
 
     test('equal scores preserve candidate order', () => {

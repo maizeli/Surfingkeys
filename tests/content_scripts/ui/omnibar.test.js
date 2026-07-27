@@ -131,6 +131,65 @@ describe('ui omnibar', () => {
         Front.hidePopup();
     });
 
+    test('reuses raw bookmarks inside the current folder', async () => {
+        runtime.conf.omnibarPinyinSearch = true;
+        localStorage.setItem('surfingkeys.lastOpenBookmark', JSON.stringify([{
+            prompt: 'bookmark',
+            folderId: 'folder',
+            focused: 0,
+        }]));
+        chrome.runtime.sendMessage.mockImplementation((message, callback) => {
+            if (message.action === 'getBookmarkFolders') {
+                callback({
+                    folders: [
+                        {id: '0', title: ''},
+                        {id: 'folder', title: '收藏夹'},
+                    ]
+                });
+            } else if (message.action === 'getBookmarks') {
+                callback({
+                    bookmarks: message.raw ? [{
+                        id: '1',
+                        parentId: 'folder',
+                        title: '微信',
+                        url: 'https://example.com/wechat',
+                    }] : []
+                });
+            }
+        });
+
+        window.postMessage({
+            surfingkeys_frontend_data: {
+                action: 'openOmnibar',
+                type: 'Bookmarks',
+                pref: 'wx',
+            }
+        }, document.location.origin);
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: 'getBookmarks',
+                parentId: 'folder',
+                raw: true,
+            }),
+            expect.any(Function)
+        );
+        expect(omnibar.getItems()).toEqual([
+            expect.objectContaining({title: '微信'})
+        ]);
+
+        omnibar.input.value = 'weixn';
+        omnibar.input.dispatchEvent(new Event('input', {bubbles: true}));
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        const rawBookmarkCalls = chrome.runtime.sendMessage.mock.calls
+            .filter(([message]) => message.action === 'getBookmarks' && message.raw);
+        expect(rawBookmarkCalls).toHaveLength(1);
+        Front.hidePopup();
+        localStorage.removeItem('surfingkeys.lastOpenBookmark');
+    });
+
     test.each([
         ['Tabs', 'getTabs', 'tabs'],
         ['CloseTabs', 'getTabs', 'tabs'],
