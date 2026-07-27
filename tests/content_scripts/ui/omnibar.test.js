@@ -131,6 +131,41 @@ describe('ui omnibar', () => {
         Front.hidePopup();
     });
 
+    test.each([
+        ['Tabs', 'getTabs', 'tabs'],
+        ['CloseTabs', 'getTabs', 'tabs'],
+        ['RecentlyClosed', 'getRecentlyClosed', 'urls'],
+        ['TabURLs', 'getTabURLs', 'urls'],
+    ])('searches %s by pinyin', async (type, action, responseKey) => {
+        runtime.conf.omnibarPinyinSearch = true;
+        chrome.runtime.sendMessage.mockImplementation((message, callback) => {
+            if (message.action === action) {
+                callback({
+                    [responseKey]: [{
+                        id: 1,
+                        windowId: 1,
+                        title: '微信',
+                        url: 'https://example.com/wechat',
+                    }]
+                });
+            }
+        });
+
+        window.postMessage({
+            surfingkeys_frontend_data: {
+                action: 'openOmnibar',
+                type,
+                pref: 'wx',
+            }
+        }, document.location.origin);
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        expect(omnibar.getItems()).toEqual([
+            expect.objectContaining({title: '微信'})
+        ]);
+        Front.hidePopup();
+    });
+
     test('pages raw history for pinyin input', async () => {
         runtime.conf.omnibarPinyinSearch = true;
         chrome.runtime.sendMessage.mockImplementation((message, callback) => {
