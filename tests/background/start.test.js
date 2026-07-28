@@ -167,4 +167,27 @@ describe('background start', () => {
         expect(sendResponse).toHaveBeenCalledWith({bookmarks});
     });
 
+    test('does not configure user script world when the API is unavailable', () => {
+        let onInstalled;
+        chrome.runtime.getManifest = () => ({manifest_version: 3});
+        chrome.runtime.onUserScriptMessage = {
+            addListener: jest.fn()
+        };
+        chrome.runtime.onInstalled = {
+            addListener: (listener) => {
+                onInstalled = listener;
+            }
+        };
+        chrome.userScripts = undefined;
+
+        start({
+            getLatestHistoryItem: jest.fn(),
+            _setNewTabUrl: jest.fn(),
+            _getContainerName: jest.fn(),
+            loadRawSettings: jest.fn(),
+        });
+
+        expect(() => onInstalled({reason: 'install'})).not.toThrow();
+    });
+
 });
