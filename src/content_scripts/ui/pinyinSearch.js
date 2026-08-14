@@ -5,6 +5,14 @@ const asciiToken = /[a-z]/i;
 const pinyinToken = /^[a-z0-9]+$/i;
 const chineseText = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]|[\uD840-\uD8BF][\uDC00-\uDFFF]/;
 
+function tokenize(query) {
+    return query.trim().split(/\s+/).filter(Boolean);
+}
+
+function canMatchPinyin(token) {
+    return asciiToken.test(token) && pinyinToken.test(token);
+}
+
 function normalizePinyin(text) {
     return text.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
@@ -203,12 +211,16 @@ export default function createPinyinSearch() {
     const cache = new Map();
 
     return {
+        needsSearch(query) {
+            return tokenize(query).some(canMatchPinyin);
+        },
+
         filter(items, query, caseSensitive, enabled) {
             if (!enabled) {
                 return filterByTitleOrUrl(items, query, caseSensitive);
             }
 
-            const tokens = query.trim().split(/\s+/).filter(Boolean);
+            const tokens = tokenize(query);
             if (!tokens.length) {
                 return items;
             }
@@ -216,7 +228,7 @@ export default function createPinyinSearch() {
             return items.map((item, index) => {
                 const tokenScores = tokens.map(token => {
                     const raw = rawTokenScore(item, token, caseSensitive);
-                    if (raw || !asciiToken.test(token) || !pinyinToken.test(token)) {
+                    if (raw || !canMatchPinyin(token)) {
                         return raw;
                     }
 

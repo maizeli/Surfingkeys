@@ -59,6 +59,70 @@ describe('history pager', () => {
         expect(fetchPage).toHaveBeenCalledTimes(1);
     });
 
+    test('does not refilter unmatched entries from earlier pages', async () => {
+        const oldMiss = {
+            title: 'Old miss',
+            url: 'https://example.com/old-miss',
+        };
+        const firstMatch = {
+            title: 'First match',
+            url: 'https://example.com/first-match',
+        };
+        const secondMatch = {
+            title: 'Second match',
+            url: 'https://example.com/second-match',
+        };
+        const fetchPage = jest.fn()
+            .mockResolvedValueOnce({
+                history: [oldMiss],
+                nextEndTime: 20,
+                done: false,
+            })
+            .mockResolvedValueOnce({
+                history: [firstMatch],
+                nextEndTime: 10,
+                done: false,
+            })
+            .mockResolvedValueOnce({
+                history: [secondMatch],
+                nextEndTime: 0,
+                done: true,
+            });
+        const filterCounts = new Map();
+        const filter = jest.fn(items => items.filter(item => {
+            filterCounts.set(item.url, (filterCounts.get(item.url) || 0) + 1);
+            return item !== oldMiss;
+        }));
+        const pager = createHistoryPager(fetchPage);
+
+        await expect(pager.search(filter, 2))
+            .resolves.toEqual([firstMatch, secondMatch]);
+        expect(filterCounts.get(oldMiss.url)).toBe(1);
+    });
+
+    test('deduplicates overlapping pages by URL', async () => {
+        const historyItem = {
+            title: "Meet Alice. Alice is impatient. – Marc's Blog",
+            url: 'https://brooker.co.za/blog/2026/06/19/waiting.html',
+        };
+        const fetchPage = jest.fn()
+            .mockResolvedValueOnce({
+                history: [historyItem],
+                nextEndTime: 10,
+                done: false,
+            })
+            .mockResolvedValueOnce({
+                history: [historyItem],
+                nextEndTime: 9,
+                done: false,
+            });
+        const pager = createHistoryPager(fetchPage);
+
+        await expect(pager.search(items => items, 2))
+            .resolves.toEqual([historyItem]);
+        expect(fetchPage).toHaveBeenCalledTimes(2);
+    });
+
     test('discards an in-flight page after clear', async () => {
         let resolveFirstPage;
         const fetchPage = jest.fn()
@@ -83,6 +147,26 @@ describe('history pager', () => {
         await expect(oldSearch).resolves.toEqual([]);
         await expect(pager.search(items => items, 1))
             .resolves.toEqual([{title: 'New session'}]);
+        expect(fetchPage).toHaveBeenCalledTimes(2);
+    });
+
+    test('allows the same URL to be loaded again after clear', async () => {
+        const historyItem = {
+            title: 'Docs',
+            url: 'https://example.com/docs',
+        };
+        const fetchPage = jest.fn().mockResolvedValue({
+            history: [historyItem],
+            nextEndTime: 0,
+            done: true,
+        });
+        const pager = createHistoryPager(fetchPage);
+
+        await expect(pager.search(items => items, 1))
+            .resolves.toEqual([historyItem]);
+        pager.clear();
+        await expect(pager.search(items => items, 1))
+            .resolves.toEqual([historyItem]);
         expect(fetchPage).toHaveBeenCalledTimes(2);
     });
 });

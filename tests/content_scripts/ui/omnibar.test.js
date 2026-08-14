@@ -97,6 +97,18 @@ describe('ui omnibar', () => {
         expect(omnibar.filterURLs(items, 'wx')).toEqual(items);
     });
 
+    test.each([
+        ['weixin', true],
+        ['wx docs.com', true],
+        ['brooker.co.za/blog', false],
+        ['wx!', false],
+        ['123', false],
+    ])('detects whether %s needs raw candidates', (query, expected) => {
+        runtime.conf.omnibarPinyinSearch = true;
+
+        expect(omnibar.needsPinyinSearch(query)).toBe(expected);
+    });
+
     test('requests raw bookmarks for pinyin input', async () => {
         runtime.conf.omnibarPinyinSearch = true;
         localStorage.removeItem('surfingkeys.lastOpenBookmark');
@@ -265,6 +277,79 @@ describe('ui omnibar', () => {
         expect(omnibar.getItems()).toEqual([
             expect.objectContaining({title: '微信'})
         ]);
+        Front.hidePopup();
+    });
+
+    test('lists recent history when opened with an empty query', async () => {
+        runtime.conf.omnibarPinyinSearch = true;
+        chrome.runtime.sendMessage.mockImplementation((message, callback) => {
+            if (message.action === 'getHistory') {
+                callback({
+                    history: [{
+                        title: "Meet Alice. Alice is impatient. - Marc's Blog",
+                        url: 'https://brooker.co.za/blog/2026/06/19/waiting.html',
+                    }]
+                });
+            }
+        });
+
+        window.postMessage({
+            surfingkeys_frontend_data: {
+                action: 'openOmnibar',
+                type: 'History',
+            }
+        }, document.location.origin);
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        expect(omnibar.getItems()).toEqual([
+            expect.objectContaining({
+                url: 'https://brooker.co.za/blog/2026/06/19/waiting.html',
+            })
+        ]);
+        Front.hidePopup();
+    });
+
+    test('renders history matches before all pages are loaded', async () => {
+        runtime.conf.omnibarPinyinSearch = true;
+        let resolveNextHistoryPage;
+        chrome.runtime.sendMessage.mockImplementation((message, callback) => {
+            if (message.action === 'getHistory') {
+                callback({history: []});
+            } else if (message.action === 'getHistoryPage' && message.endTime === undefined) {
+                callback({
+                    history: [{
+                        title: "Meet Alice. Alice is impatient. - Marc's Blog",
+                        url: 'https://brooker.co.za/blog/2026/06/19/waiting.html',
+                    }],
+                    nextEndTime: 10,
+                    done: false,
+                });
+            } else if (message.action === 'getHistoryPage') {
+                resolveNextHistoryPage = callback;
+            }
+        });
+
+        window.postMessage({
+            surfingkeys_frontend_data: {
+                action: 'openOmnibar',
+                type: 'History',
+            }
+        }, document.location.origin);
+        await new Promise(resolve => setTimeout(resolve, 20));
+
+        omnibar.input.value = 'brooker';
+        omnibar.input.dispatchEvent(new Event('input', {bubbles: true}));
+        await new Promise(resolve => setTimeout(resolve, 250));
+
+        expect(resolveNextHistoryPage).toEqual(expect.any(Function));
+        expect(omnibar.getItems()).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                url: 'https://brooker.co.za/blog/2026/06/19/waiting.html',
+            })
+        ]));
+
+        resolveNextHistoryPage({history: [], nextEndTime: 0, done: true});
+        await new Promise(resolve => setTimeout(resolve, 20));
         Front.hidePopup();
     });
 

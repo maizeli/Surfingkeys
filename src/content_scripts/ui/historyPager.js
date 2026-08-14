@@ -4,6 +4,7 @@ export default function createHistoryPager(fetchPage) {
     let done = false;
     let loading;
     let generation = 0;
+    let seenURLs = new Set();
 
     function loadPage(searchGeneration) {
         if (!loading) {
@@ -12,9 +13,16 @@ export default function createHistoryPager(fetchPage) {
                 maxResults: 500,
             }).then(response => {
                 if (searchGeneration === generation) {
-                    items = items.concat(response.history);
+                    const newItems = response.history.filter(item => {
+                        if (!item.url || seenURLs.has(item.url)) {
+                            return !item.url;
+                        }
+                        seenURLs.add(item.url);
+                        return true;
+                    });
+                    items = items.concat(newItems);
                     endTime = response.nextEndTime;
-                    done = response.done;
+                    done = response.done || newItems.length === 0;
                 }
                 if (loading === request) {
                     loading = null;
@@ -26,15 +34,20 @@ export default function createHistoryPager(fetchPage) {
     }
 
     return {
-        async search(filter, limit) {
+        async search(filter, limit, onUpdate) {
             const searchGeneration = generation;
             let matches = filter(items);
+            let processedCount = items.length;
             while (matches.length < limit && !done) {
                 await loadPage(searchGeneration);
                 if (searchGeneration !== generation) {
                     return [];
                 }
-                matches = filter(items);
+                matches = filter(matches.concat(items.slice(processedCount)));
+                processedCount = items.length;
+                if (onUpdate && matches.length && !done) {
+                    onUpdate(matches.slice(0, limit));
+                }
             }
             return matches.slice(0, limit);
         },
@@ -45,6 +58,7 @@ export default function createHistoryPager(fetchPage) {
             endTime = undefined;
             done = false;
             loading = null;
+            seenURLs = new Set();
         },
     };
 }

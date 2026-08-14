@@ -499,7 +499,7 @@ function createOmnibar(front, clipboard) {
     };
 
     self.needsPinyinSearch = query => {
-        return runtime.conf.omnibarPinyinSearch && /[a-z]/i.test(query);
+        return runtime.conf.omnibarPinyinSearch && pinyinSearch.needsSearch(query);
     };
 
     self.filterURLs = function(items, query = self.input.value) {
@@ -754,12 +754,13 @@ function createOmnibar(front, clipboard) {
     self.addHandler('Bookmarks', OpenBookmarks(self));
     self.addHandler('AddBookmark', AddBookmark(self));
     const historyPager = createOmnibarHistoryPager();
-    const historyHandler = OpenURLs(`history${separatorHtml}`, self, () => {
+    const historyHandler = OpenURLs(`history${separatorHtml}`, self, (onUpdate) => {
         const query = self.input.value;
         if (self.needsPinyinSearch(query)) {
             return historyPager.search(
                 items => self.filterURLs(orderHistory(items), query),
-                self.getHistoryCacheSize()
+                self.getHistoryCacheSize(),
+                onUpdate
             );
         }
         return new Promise((resolve, reject) => {
@@ -1157,13 +1158,14 @@ function OpenURLs(prompt, omnibar, queryFn) {
 
     const queryAndList = () => {
         let myseq = ++sequenceNumber;
-        queryFn().then((urls) => {
+        const list = (urls) => {
             if (myseq === sequenceNumber) {
                 var val = omnibar.input.value;
                 omnibar.detectAndInsertURLItem(val, urls);
                 omnibar.listURLs(urls, false);
             }
-        });
+        };
+        queryFn(list).then(list);
     };
     self.onOpen = function(arg) {
         if (arg) {
