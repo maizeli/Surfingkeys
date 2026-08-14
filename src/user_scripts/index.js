@@ -122,7 +122,7 @@ initSKFunctionListener("user", {
     onEditorWrite: (data) => {
         onEditorWriteFn(data);
     },
-    onHintClicked: (shiftKey, element) => {
+    onHintClicked: (element, shiftKey) => {
         if (typeof(hintsFunction) === 'function') {
             hintsFunction(element, shiftKey);
         }
@@ -223,7 +223,11 @@ const api = {
             dispatchSKEvent('api', ['hints:click', links, force]);
         },
         create: (cssSelector, onHintKey, attrs) => {
-            if (typeof(cssSelector) !== 'string') {
+            if (cssSelector instanceof RegExp) {
+                // Forward the pattern as a plain object; it is rebuilt into a
+                // RegExp on the content-script side (see api.js "hints:create").
+                cssSelector = { source: cssSelector.source, flags: cssSelector.flags };
+            } else if (typeof(cssSelector) !== 'string') {
                 const hintsCreating = "surfingkeys--hints--creating";
                 if (createCssSelectorForElements(hintsCreating, cssSelector) === 0) {
                     return false;
